@@ -1,0 +1,40 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: "Roboto", sans-serif;
+    text-align: center;
+    color: whitesmoke;
+    isolation: isolate;
+}
+
+header {
+    position: relative;
+    isolation: isolate;
+    z-index: 2;
+}
+
+main {
+    position: realtive;
+    isolation: isolate;
+    z-index: 1;
+}
+
+main * {
+    position: relative;
+    z-index: 1;
+}
+
+#canvasContainer {
+    position: absolute;
+    inset: 0 0 0 0;
+    z-index: 0;
+}
+
+#canvas {
+    background-color: black;
+    display: block;
+}
