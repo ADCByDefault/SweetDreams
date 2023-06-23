@@ -6,6 +6,12 @@ const canvas = document.getElementById("canvas");
  * @type {CanvasRenderingContext2D};
  */
 const ctx = canvas.getContext("2d");
+/**
+ * @type {AudioContext};
+ */
+const audioCtx = new AudioContext();
+const gain = audioCtx.createGain();
+gain.connect(audioCtx.destination);
 ctx.properties = {
     fillStyle: "white",
     strokeStyle: "white",
@@ -14,18 +20,19 @@ ctx.properties = {
     baseOffsetX: 20,
     baseOffsetY: 20,
     centerPiece: 5,
-    pointSize: 2,
+    pointSize: 3,
 };
 window.addEventListener("load", () => {
     resizeCanvas();
     setUpCTX(ctx);
-    set();
 });
 window.addEventListener("resize", () => {
     resizeCanvas();
 });
 window.addEventListener("click", (e) => {
     console.log(e.clientX, e.clientY);
+    audioCtx.resume();
+    setUpCTX(ctx);
     set();
 });
 
@@ -33,7 +40,16 @@ function resizeCanvas() {
     canvas.height = window.innerHeight;
     canvas.width = window.innerWidth;
 }
-
+const herphone = {
+    arcs: 10,
+    baseFrequency: 200,
+    FrequencyStep: 20,
+    time: 100,
+    roundOfFirst: 10,
+    startingAngle: Math.PI,
+    killTime: 1,
+    gainTime: 0.01,
+};
 class Point {
     /**
      *
@@ -59,6 +75,58 @@ class Point {
         this.ctx.fill();
         this.ctx.closePath();
     }
+    delete() {
+        this.x = null;
+        this.y = null;
+        this.ctx = null;
+    }
+}
+class Sound {
+    /**
+     * @type {AudioContext}
+     */
+    static audioCtx = audioCtx;
+    /**
+     * @type {GainNode}
+     */
+    static gain = gain;
+    static gainTime = herphone.gainTime;
+    static killTime = herphone.killTime;
+    /**
+     *
+     * @param {number} frequency
+     */
+    constructor(frequency) {
+        /**
+         * @type {GainNode}
+         */
+        this.gain1 = Sound.audioCtx.createGain();
+        this.gain1.connect(Sound.gain);
+        this.oscillator = Sound.audioCtx.createOscillator();
+        this.oscillator.frequency.value = frequency;
+        this.oscillator.connect(this.gain1);
+        this.gain1.gain.value = 0;
+        this.oscillator.start();
+    }
+    play() {
+        this.gain1.gain.linearRampToValueAtTime(
+            0.3,
+            Sound.audioCtx.currentTime + Sound.gainTime
+        );
+    }
+    stop() {
+        this.gain1.gain.linearRampToValueAtTime(
+            0,
+            Sound.audioCtx.currentTime + Sound.killTime
+        );
+    }
+    delete() {
+        this.oscillator.stop();
+        this.oscillator.disconnect();
+        this.gain1.disconnect();
+        this.oscillator = null;
+        this.gain1 = null;
+    }
 }
 class Arc {
     /**
@@ -70,7 +138,17 @@ class Arc {
      * @param {CanvasRenderingContext2D} ctx
      * @param {string} color
      */
-    constructor(x, y, radius, point, velocity, startingAngle, ctx, color) {
+    constructor(
+        x,
+        y,
+        radius,
+        point,
+        velocity,
+        startingAngle,
+        ctx,
+        color,
+        frequency
+    ) {
         this.x = x;
         this.y = y;
         this.radius = radius;
@@ -79,6 +157,14 @@ class Arc {
         this.angle = startingAngle;
         this.ctx = ctx;
         this.color = color;
+        this.sound = new Sound(frequency);
+        this.interval = setInterval(() => {
+            this.playSound();
+        }, ((1 / (this.velocity / frameFrequency)) * 1000) / 2);
+    }
+    playSound() {
+        this.sound.play();
+        this.sound.stop();
     }
     draw() {
         this.ctx.save();
@@ -94,7 +180,7 @@ class Arc {
     movePoint() {
         this.angle += -this.velocity;
         if (this.angle < 0) {
-            this.angle = Math.PI * 2;
+            this.angle += Math.PI * 2;
         }
         let x = Math.cos(this.angle) * this.radius;
         let y = Math.sin(this.angle) * this.radius;
@@ -104,13 +190,22 @@ class Arc {
             this.point.setPoint(this.x + x, this.y + y);
         }
     }
+    delete() {
+        this.x = null;
+        this.y = null;
+        this.radius = null;
+        this.point.delete();
+        this.point = null;
+        this.velocity = null;
+        this.angle = null;
+        this.ctx = null;
+        this.color = null;
+        this.sound.delete();
+        this.sound = null;
+        clearInterval(this.interval);
+    }
 }
-const herphone = {
-    arcs: 9,
-    time: 2000,
-    roundOfFirst: 100,
-    startingAngle: Math.PI,
-};
+
 const frameFrequency = (Math.PI * 2) / 60;
 const arcs = [];
 /**
@@ -125,10 +220,16 @@ const arcs = [];
  */
 function createArcs(n, lineFrom, lineTo, x, y, ctx, color) {
     const length = lineTo - lineFrom;
+    let j = arcs.length;
+    for (let i = j - 1; i >= 0; i--) {
+        arcs[i].delete();
+        arcs.pop();
+    }
     for (let i = 1; i <= n; i++) {
         let radius = (length / n) * i;
         let point = new Point(x - radius, y, ctx);
-        let velocity = (herphone.roundOfFirst - i + 1) / herphone.time;
+        let velocity =
+            (herphone.roundOfFirst - i + 1 + herphone.arcs) / herphone.time;
         velocity = velocity * frameFrequency;
         let arc = new Arc(
             x,
@@ -138,7 +239,8 @@ function createArcs(n, lineFrom, lineTo, x, y, ctx, color) {
             velocity,
             herphone.startingAngle,
             ctx,
-            color
+            color,
+            herphone.baseFrequency + herphone.FrequencyStep * i
         );
         arcs.push(arc);
     }
@@ -170,21 +272,26 @@ function setUpCTX(ctx) {
  * @param {HTMLCanvasElement} canvas
  */
 function drawBase(ctx, canvas) {
-    let width = canvas.width;
-    let height = canvas.height;
-    ctx.clearRect(0, 0, width, height);
+    if (canvas.width > 1000) {
+        width = 980;
+        ctx.properties.baseOffsetX = (canvas.width - 1000) / 2;
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.beginPath();
-    ctx.moveTo(ctx.properties.baseOffsetX, height - ctx.properties.baseOffsetY);
+    ctx.moveTo(
+        ctx.properties.baseOffsetX,
+        canvas.height - ctx.properties.baseOffsetY
+    );
     ctx.lineTo(
-        width - ctx.properties.baseOffsetX,
-        height - ctx.properties.baseOffsetY
+        canvas.width - ctx.properties.baseOffsetX,
+        canvas.height - ctx.properties.baseOffsetY
     );
     ctx.stroke();
     ctx.closePath();
     ctx.beginPath();
     ctx.arc(
-        width / 2,
-        height - ctx.properties.baseOffsetY,
+        canvas.width / 2,
+        canvas.height - ctx.properties.baseOffsetY,
         ctx.properties.centerPiece,
         Math.PI,
         Math.PI * 2
