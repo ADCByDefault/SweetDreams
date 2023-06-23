@@ -106,11 +106,12 @@ class Arc {
     }
 }
 const herphone = {
-    arcs: 5,
-    velocity: 0.02,
-    decrease: 0.001,
+    arcs: 9,
+    time: 2000,
+    roundOfFirst: 100,
     startingAngle: Math.PI,
 };
+const frameFrequency = (Math.PI * 2) / 60;
 const arcs = [];
 /**
  *
@@ -127,12 +128,14 @@ function createArcs(n, lineFrom, lineTo, x, y, ctx, color) {
     for (let i = 1; i <= n; i++) {
         let radius = (length / n) * i;
         let point = new Point(x - radius, y, ctx);
+        let velocity = (herphone.roundOfFirst - i + 1) / herphone.time;
+        velocity = velocity * frameFrequency;
         let arc = new Arc(
             x,
             y,
             radius,
             point,
-            herphone.velocity - herphone.decrease * i,
+            velocity,
             herphone.startingAngle,
             ctx,
             color
