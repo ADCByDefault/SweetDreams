@@ -1,3 +1,5 @@
+/**********  defaults and set-up  **********/
+/**********  reset  **********/
 * {
     box-sizing: border-box;
     margin: 0;
@@ -8,15 +10,17 @@ body {
     font-family: "Roboto", sans-serif;
     text-align: center;
     color: whitesmoke;
+    background-color: black;
+    overflow: hidden;
     isolation: isolate;
 }
-
+/**********  header  **********/
 header {
     position: relative;
     isolation: isolate;
     z-index: 2;
 }
-
+/**********  main  **********/
 main {
     position: realtive;
     isolation: isolate;
@@ -37,4 +41,47 @@ main * {
 #canvas {
     background-color: black;
     display: block;
+}
+
+/**********  functionals  **********/
+
+/**********  header  **********/
+
+/**********  play-pause  **********/
+.status {
+    background-color: transparent;
+    width: 100px;
+    aspect-ratio: 1;
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 50%;
+    transform: translate(-50%, 0);
+    display: flex;
+}
+.status .one,
+.status .two {
+    background-color: white;
+    transition-property: opacity clip-path;
+    transition-duration: 0.5s;
+    transition-timing-function: cubic-bezier(0.65, 0.05, 0.36, 1);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+}
+.status.pause .one {
+    opacity: 0;
+    clip-path: polygon(31% 50%, 31% 50%, 31% 50%, 31% 50%);
+}
+.status.pause .two {
+    clip-path: polygon(0 0, 100% 50%, 100% 50%, 0% 100%);
+}
+
+.status.play .one {
+    opacity: 1;
+    clip-path: polygon(18% 0, 42% 0, 42% 100%, 18% 100%);
+}
+.status.play .two {
+    clip-path: polygon(58% 0, 82% 0, 82% 100%, 58% 100%);
 }

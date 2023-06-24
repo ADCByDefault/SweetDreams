@@ -27,19 +27,37 @@ window.addEventListener("load", () => {
     setUpCTX(ctx);
 });
 window.addEventListener("resize", () => {
-    resizeCanvas();
+    window.location.reload();
 });
-window.addEventListener("click", (e) => {
-    console.log(e.clientX, e.clientY);
-    audioCtx.resume();
-    setUpCTX(ctx);
-    set();
-});
-
 function resizeCanvas() {
     canvas.height = window.innerHeight;
     canvas.width = window.innerWidth;
 }
+/**
+ * @type {HTMLElement}
+ */
+const playButton = document.querySelector("#status");
+let animationRequest = null;
+
+playButton.addEventListener("click", () => {
+    const status = playButton.getAttribute("status");
+    playButton.classList.toggle("play");
+    playButton.classList.toggle("pause");
+    if (status === "pause") {
+        playButton.setAttribute("status", "play");
+        audioCtx.resume();
+        set();
+        animation();
+    } else {
+        playButton.setAttribute("status", "pause");
+        audioCtx.suspend();
+        window.cancelAnimationFrame(animationRequest);
+    }
+});
+
+/**
+ * collection of the properties of the arcs that can be changed by user
+ */
 const herphone = {
     arcs: 10,
     baseFrequency: 200,
@@ -49,32 +67,65 @@ const herphone = {
     startingAngle: Math.PI,
     killTime: 1,
     gainTime: 0.01,
+    waveType: "sine",
+    color: {
+        from: "777777",
+        to: "ffffff",
+    },
 };
 class Point {
     /**
      *
      * @param {number} x
      * @param {number} y
-     * @param {CanvasRenderingContext2D} ctx
+     * @param {CanvasRenderingContext2D} ctx (the canvas context)
+     * and should have a property called porperties
+     * this property should have the following property:
+     * pointSize: number
+     * {ctx.properties.pointSize}
+     * @param {string} color (all the accepted by ctx)
+     * creates a vector with the given x and y
      */
-    constructor(x, y, ctx) {
+    constructor(x, y, ctx, color) {
         this.x = x;
         this.y = y;
         this.ctx = ctx;
+        this.color = color;
     }
+    /**
+     *
+     * @returns {number[]} returns the point vector as an array
+     */
     getPoint() {
         return [this.x, this.y];
     }
+    /**
+     *
+     * @param {number} x
+     * @param {number} y
+     * sets the vector values to the given x and y
+     */
     setPoint(x, y) {
         this.x = x;
         this.y = y;
     }
+    /**
+     * draws the point on the canvas
+     * size is ctx.properties.pointSize
+     */
     draw() {
+        this.ctx.save();
+        this.ctx.fillStyle = this.color;
+        this.ctx.strokeStyle = this.color;
         this.ctx.beginPath();
         this.ctx.arc(this.x, this.y, ctx.properties.pointSize, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.closePath();
+        this.ctx.restore();
     }
+    /**
+     * sets all the values to null
+     */
     delete() {
         this.x = null;
         this.y = null;
@@ -90,11 +141,22 @@ class Sound {
      * @type {GainNode}
      */
     static gain = gain;
+    /**
+     * @type {number} time to go from 0A to maxA
+     */
     static gainTime = herphone.gainTime;
+    /**
+     * @type {number} time to go from maxA to 0A
+     */
     static killTime = herphone.killTime;
+    /**
+     * @type {string} wave type
+     */
+    static waveType = herphone.waveType;
     /**
      *
      * @param {number} frequency
+     * creates a sound with the given frequency
      */
     constructor(frequency) {
         /**
@@ -104,22 +166,32 @@ class Sound {
         this.gain1.connect(Sound.gain);
         this.oscillator = Sound.audioCtx.createOscillator();
         this.oscillator.frequency.value = frequency;
+        this.oscillator.type = Sound.waveType;
         this.oscillator.connect(this.gain1);
         this.gain1.gain.value = 0;
         this.oscillator.start();
     }
+    /**
+     * plays the sound from 0A to 0.3A in Sound.gainTime seconds
+     */
     play() {
         this.gain1.gain.linearRampToValueAtTime(
             0.3,
             Sound.audioCtx.currentTime + Sound.gainTime
         );
     }
+    /**
+     * stops the sound from 0.3A to 0A in Sound.killTime seconds
+     */
     stop() {
         this.gain1.gain.linearRampToValueAtTime(
             0,
             Sound.audioCtx.currentTime + Sound.killTime
         );
     }
+    /**
+     * sets all the values to null and disconnects the oscillator
+     */
     delete() {
         this.oscillator.stop();
         this.oscillator.disconnect();
@@ -135,8 +207,11 @@ class Arc {
      * @param {number} y
      * @param {number} radius
      * @param {Point} point
+     * @param {number} velocity
+     * @param {number} startingAngle
      * @param {CanvasRenderingContext2D} ctx
      * @param {string} color
+     * @param {number} frequency
      */
     constructor(
         x,
@@ -157,15 +232,22 @@ class Arc {
         this.angle = startingAngle;
         this.ctx = ctx;
         this.color = color;
+        this.frequency = frequency;
         this.sound = new Sound(frequency);
         this.interval = setInterval(() => {
             this.playSound();
         }, ((1 / (this.velocity / frameFrequency)) * 1000) / 2);
     }
+    /**
+     * plays the arc sound and stops it (gainTime and killTime, see Sound class)
+     */
     playSound() {
         this.sound.play();
         this.sound.stop();
     }
+    /**
+     * draws the arc and the point
+     */
     draw() {
         this.ctx.save();
         this.ctx.fillStyele = this.color;
@@ -174,9 +256,13 @@ class Arc {
         this.ctx.arc(this.x, this.y, this.radius, Math.PI, Math.PI * 2);
         this.ctx.stroke();
         this.ctx.closePath();
+        ctx.strokeText(this.frequency, this.x - this.radius, this.y + 10);
         this.point.draw();
         this.ctx.restore();
     }
+    /**
+     * moves the point on the arc by one step (velocity)
+     */
     movePoint() {
         this.angle += -this.velocity;
         if (this.angle < 0) {
@@ -190,6 +276,9 @@ class Arc {
             this.point.setPoint(this.x + x, this.y + y);
         }
     }
+    /**
+     * sets all the values to null
+     */
     delete() {
         this.x = null;
         this.y = null;
@@ -210,16 +299,25 @@ const frameFrequency = (Math.PI * 2) / 60;
 const arcs = [];
 /**
  *
- * @param {number} n
- * @param {number} lineFrom
- * @param {number} lineTo
- * @param {number} x
- * @param {number} y
- * @param {CanvasRenderingContext2D} ctx
- * @param {string} color
+ * @param {number} n number of arcs
+ * @param {number} lineFrom starting x of the base line
+ * @param {number} lineTo ending x of the base line
+ * @param {number} x center x of all arcs
+ * @param {number} y center y of all arcs
+ * @param {CanvasRenderingContext2D} ctx canvas context
+ * @param {string} color from and to color of the arcs
+ * color is a hex string without the #
+ * color{
+ *  from: string,
+ *  to: string
+ * }
+ *
  */
 function createArcs(n, lineFrom, lineTo, x, y, ctx, color) {
     const length = lineTo - lineFrom;
+    if (arcs == null) {
+        const arcs = [];
+    }
     let j = arcs.length;
     for (let i = j - 1; i >= 0; i--) {
         arcs[i].delete();
@@ -227,7 +325,15 @@ function createArcs(n, lineFrom, lineTo, x, y, ctx, color) {
     }
     for (let i = 1; i <= n; i++) {
         let radius = (length / n) * i;
-        let point = new Point(x - radius, y, ctx);
+        let colorHex = parseInt(
+            (
+                parseInt(color.from, 16) +
+                ((parseInt(color.to, 16) - parseInt(color.from, 16)) /
+                    herphone.arcs) *
+                    i
+            ).toFixed(0)
+        ).toString(16);
+        let point = new Point(x - radius, y, ctx, `#${colorHex}`);
         let velocity =
             (herphone.roundOfFirst - i + 1 + herphone.arcs) / herphone.time;
         velocity = velocity * frameFrequency;
@@ -239,7 +345,7 @@ function createArcs(n, lineFrom, lineTo, x, y, ctx, color) {
             velocity,
             herphone.startingAngle,
             ctx,
-            color,
+            `#${colorHex}`,
             herphone.baseFrequency + herphone.FrequencyStep * i
         );
         arcs.push(arc);
@@ -247,6 +353,10 @@ function createArcs(n, lineFrom, lineTo, x, y, ctx, color) {
 }
 function set() {
     drawBase(ctx, canvas);
+    if (!isReset()) {
+        console.log("reset no");
+        return;
+    }
     createArcs(
         herphone.arcs,
         ctx.properties.baseOffsetX,
@@ -254,12 +364,13 @@ function set() {
         canvas.width / 2,
         canvas.height - ctx.properties.baseOffsetY,
         ctx,
-        "white"
+        herphone.color
     );
+    console.table(arcs);
 }
 /**
  *
- * @param {CanvasRenderingContext2D} ctx
+ * @param {CanvasRenderingContext2D} ctx canvas context
  */
 function setUpCTX(ctx) {
     ctx.fillStyle = ctx.properties.fillStyle;
@@ -300,11 +411,18 @@ function drawBase(ctx, canvas) {
     ctx.closePath();
 }
 function animation() {
-    window.requestAnimationFrame(animation);
+    animationRequest = window.requestAnimationFrame(animation);
     drawBase(ctx, canvas);
     arcs.forEach((arc) => {
         arc.draw();
         arc.movePoint();
     });
 }
-animation();
+let first = true;
+function isReset() {
+    if (first) {
+        first = false;
+        return true;
+    }
+    return false;
+}
