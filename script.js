@@ -25,6 +25,7 @@ ctx.properties = {
 window.addEventListener("load", () => {
     resizeCanvas();
     setUpCTX(ctx);
+    setInputs();
 });
 window.addEventListener("resize", () => {
     window.location.reload();
@@ -38,12 +39,13 @@ function resizeCanvas() {
  */
 const playButton = document.querySelector("#status");
 let animationRequest = null;
-
+let isReset = true;
 playButton.addEventListener("click", () => {
     const status = playButton.getAttribute("status");
     playButton.classList.toggle("play");
     playButton.classList.toggle("pause");
     if (status === "pause") {
+        setHerphone();
         playButton.setAttribute("status", "play");
         audioCtx.resume();
         set();
@@ -54,22 +56,94 @@ playButton.addEventListener("click", () => {
         window.cancelAnimationFrame(animationRequest);
     }
 });
-
 /**
  * collection of the properties of the arcs that can be changed by user
  */
 const herphone = {
+    modList: {
+        arcs: {
+            name: "arcs",
+            type: "range",
+            step: 1,
+            default: 10,
+            min: 5,
+            max: 25,
+        },
+        baseFrequency: {
+            name: "baseFrequency",
+            type: "range",
+            step: 10,
+            default: 200,
+            min: 100,
+            max: 440,
+        },
+        FrequencyStep: {
+            name: "FrequencyStep",
+            type: "range",
+            step: 5,
+            default: 20,
+            min: 5,
+            max: 150,
+        },
+        time: {
+            name: "time",
+            type: "range",
+            step: 10,
+            default: 100,
+            min: 50,
+            max: 10000,
+        },
+        roundOfFirst: {
+            name: "roundOfFirst",
+            type: "range",
+            step: 1,
+            default: 40,
+            min: 25,
+            max: 200,
+        },
+        killTime: {
+            name: "killTime",
+            type: "range",
+            step: 0.01,
+            default: 1,
+            min: 0.01,
+            max: 2,
+        },
+        gainTime: {
+            name: "gainTime",
+            type: "range",
+            step: 0.01,
+            default: 0.2,
+            min: 0.01,
+            max: 2,
+        },
+        maxGain: {
+            name: "maxGain",
+            type: "range",
+            step: 0.01,
+            default: 0.2,
+            min: 0.01,
+            max: 1,
+        },
+        waveType: {
+            name: "waveType",
+            type: "menu",
+            default: "sine",
+            values: ["sine", "square", "sawtooth", "triangle"],
+        },
+    },
     arcs: 10,
     baseFrequency: 200,
     FrequencyStep: 20,
     time: 100,
-    roundOfFirst: 10,
+    roundOfFirst: 12,
     startingAngle: Math.PI,
-    killTime: 1,
-    gainTime: 0.01,
+    killTime: 2,
+    gainTime: 0.1,
+    maxGain: 0.2,
     waveType: "sine",
     color: {
-        from: "777777",
+        from: "000000",
         to: "ffffff",
     },
 };
@@ -154,6 +228,10 @@ class Sound {
      */
     static waveType = herphone.waveType;
     /**
+     * @type {number} max amplitude
+     */
+    static maxGain = herphone.maxGain;
+    /**
      *
      * @param {number} frequency
      * creates a sound with the given frequency
@@ -176,8 +254,8 @@ class Sound {
      */
     play() {
         this.gain1.gain.linearRampToValueAtTime(
-            0.3,
-            Sound.audioCtx.currentTime + Sound.gainTime
+            Sound.maxGain,
+            audioCtx.currentTime + Sound.gainTime
         );
     }
     /**
@@ -186,7 +264,7 @@ class Sound {
     stop() {
         this.gain1.gain.linearRampToValueAtTime(
             0,
-            Sound.audioCtx.currentTime + Sound.killTime
+            audioCtx.currentTime + Sound.killTime
         );
     }
     /**
@@ -233,15 +311,13 @@ class Arc {
         this.ctx = ctx;
         this.color = color;
         this.frequency = frequency;
+        this.onPi = false;
         this.sound = new Sound(frequency);
-        this.interval = setInterval(() => {
-            this.playSound();
-        }, ((1 / (this.velocity / frameFrequency)) * 1000) / 2);
     }
     /**
      * plays the arc sound and stops it (gainTime and killTime, see Sound class)
      */
-    playSound() {
+    async playSound() {
         this.sound.play();
         this.sound.stop();
     }
@@ -266,7 +342,13 @@ class Arc {
     movePoint() {
         this.angle += -this.velocity;
         if (this.angle < 0) {
+            this.playSound();
+            this.onPi = true;
             this.angle += Math.PI * 2;
+        }
+        if (this.angle < Math.PI && this.onPi) {
+            this.playSound();
+            this.onPi = false;
         }
         let x = Math.cos(this.angle) * this.radius;
         let y = Math.sin(this.angle) * this.radius;
@@ -352,9 +434,9 @@ function createArcs(n, lineFrom, lineTo, x, y, ctx, color) {
     }
 }
 function set() {
+    console.log(isReset);
     drawBase(ctx, canvas);
-    if (!isReset()) {
-        console.log("reset no");
+    if (!isReset) {
         return;
     }
     createArcs(
@@ -366,7 +448,7 @@ function set() {
         ctx,
         herphone.color
     );
-    console.table(arcs);
+    isReset = false;
 }
 /**
  *
@@ -418,11 +500,81 @@ function animation() {
         arc.movePoint();
     });
 }
-let first = true;
-function isReset() {
-    if (first) {
-        first = false;
-        return true;
-    }
-    return false;
+
+// setting data
+
+const options = document.querySelector("#options");
+const toggleOptions = document.querySelector("#toggle");
+toggleOptions.addEventListener("click", () => {
+    console.log("clicked");
+    options.classList.toggle("close");
+    options.classList.toggle("open");
+});
+
+const form = document.querySelector("#inputs");
+function setInputs() {
+    const inputs = herphone.modList;
+    Object.keys(inputs).forEach((key) => {
+        if (inputs[key].type == "range") {
+            form.appendChild(createRangeField(inputs[key]));
+        }
+        if (inputs[key].type == "menu") {
+            form.appendChild(createMenuField(inputs[key]));
+        }
+    });
 }
+function createRangeField(key) {
+    let div = document.createElement("div");
+    div.classList.add("input-container");
+    let input = document.createElement("input");
+    input.classList.add("input-range");
+    input.type = "range";
+    input.name = key.name;
+    input.min = key.min;
+    input.max = key.max;
+    input.step = key.step;
+    input.value = key.default;
+    let p = document.createElement("p");
+    p.classList.add("input-label");
+    let span = document.createElement("span");
+    span.innerText = key.default;
+    p.innerText = key.name + ": ";
+    p.appendChild(span);
+    div.appendChild(p);
+    div.appendChild(input);
+    input.addEventListener("input", (e) => {
+        span.innerText = input.value;
+        let target = e.target;
+        reset(target.name, target.value);
+    });
+    return div;
+}
+function createMenuField(key) {
+    let div = document.createElement("div");
+    div.classList.add("input-container");
+    let select = document.createElement("select");
+    select.name = key.name;
+    select.classList.add("input-menu");
+    key.values.forEach((value) => {
+        let option = document.createElement("option");
+        option.value = value;
+        option.innerText = value;
+        select.appendChild(option);
+    });
+    div.appendChild(select);
+    select.addEventListener("change", (e) => {
+        let target = e.target;
+        reset(target.name, target.value);
+    });
+    return div;
+}
+
+function reset(name, value) {
+    herphone[name] = value;
+    isReset = true;
+    if (playButton.classList.contains("play")) {
+        playButton.click();
+    }
+}
+
+function setHerphone() {}
