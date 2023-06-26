@@ -428,13 +428,12 @@ function createArcs(n, lineFrom, lineTo, x, y, ctx, color) {
             herphone.startingAngle,
             ctx,
             `#${colorHex}`,
-            herphone.baseFrequency + herphone.FrequencyStep * i
+            herphone.baseFrequency + herphone.FrequencyStep * (i - 1)
         );
         arcs.push(arc);
     }
 }
 function set() {
-    console.log(isReset);
     drawBase(ctx, canvas);
     if (!isReset) {
         return;
@@ -506,7 +505,6 @@ function animation() {
 const options = document.querySelector("#options");
 const toggleOptions = document.querySelector("#toggle");
 toggleOptions.addEventListener("click", () => {
-    console.log("clicked");
     options.classList.toggle("close");
     options.classList.toggle("open");
 });
@@ -545,7 +543,7 @@ function createRangeField(key) {
     input.addEventListener("input", (e) => {
         span.innerText = input.value;
         let target = e.target;
-        reset(target.name, target.value);
+        reset(target.name, parseFloat(target.value));
     });
     return div;
 }
